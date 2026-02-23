@@ -61,6 +61,13 @@ export async function login(formData) {
   }
   return { success: false };
 }
+export async function obtenerHistorialPedidos() {
+  return await prisma.pedido.findMany({
+    where: { estado: 'ENTREGADO' }, // Solo trae los que ya se cobraron
+    orderBy: { fecha: 'desc' }, // Los ordena del más nuevo al más viejo
+    include: { items: { include: { producto: true } } }
+  });
+}
 
 export async function obtenerPedidosAdmin() {
   return await prisma.pedido.findMany({
