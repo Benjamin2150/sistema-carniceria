@@ -9,7 +9,7 @@ export default function Home() {
   const [busqueda, setBusqueda] = useState("");
   const [carritoAbierto, setCarritoAbierto] = useState(false);
   
-  // NUEVO: Estados para manejar el texto libre (número) y la unidad (kg o gr)
+  // Estados para manejar el texto libre (número) y la unidad (kg o gr)
   const [cantidades, setCantidades] = useState({});
   const [unidades, setUnidades] = useState({});
   
@@ -90,12 +90,35 @@ export default function Home() {
     setEnviando(false);
   };
 
+  // --- LÓGICA PARA EXPORTAR A LAS PESAS DIGI (LABELNET) ---
+  const descargarTXT = () => {
+    if (productos.length === 0) {
+      alert("No hay productos cargados en la base de datos.");
+      return;
+    }
+    
+    let contenido = "";
+    // Iteramos sobre todos los productos para armar el formato exacto de LabelNet
+    productos.forEach(p => {
+      // Si no tiene PLU, usamos su ID por defecto para que no falle
+      const numeroPlu = p.plu || p.id; 
+      // Formato: PLU_No (tab) PLU_EANItemCode (tab) Nombre (tab) Precio Unitario
+      contenido += `${numeroPlu}\t${numeroPlu}\t${p.nombre}\t${p.precio}\n`;
+    });
+
+    // Creamos el archivo y forzamos la descarga en el navegador
+    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'precios_labelnet.txt');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Obtener lista de categorías únicas de la base de datos
   const categorias = ["Todos", ...new Set(productos.map(p => p.categoria))];
-  
-  const productosVisibles = productos.filter(p => {
-    return (filtro === "Todos" || p.categoria === filtro) &&
-           p.nombre.toLowerCase().includes(busqueda.toLowerCase());
-  });
 
   return (
     <div className="min-h-screen bg-[#0c120e] text-[#e2e8f0] font-sans selection:bg-amber-500 selection:text-black">
@@ -153,9 +176,10 @@ export default function Home() {
         </div>
       </div>
 
-      {/* --- CATÁLOGO --- */}
+      {/* --- CATÁLOGO ORDENADO POR CATEGORÍAS --- */}
       <div className="max-w-7xl mx-auto px-4 py-16">
-        <div className="flex justify-center flex-wrap gap-4 mb-12">
+        {/* Botones de Filtro Superiores */}
+        <div className="flex justify-center flex-wrap gap-4 mb-16">
           {categorias.map(cat => (
             <button 
               key={cat} 
@@ -170,92 +194,151 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-          {productosVisibles.map((p) => {
-            const pesoCalculado = getPesoCalculado(p.id);
-            const precioAproximado = p.precio * pesoCalculado;
+        {/* Mapeo de Categorías y sus Productos */}
+        {categorias.filter(c => c !== "Todos" && (filtro === "Todos" || filtro === c)).map(categoriaActual => {
+          
+          // Filtramos los productos que pertenecen a esta categoría Y coinciden con la búsqueda
+          const productosDeEstaCategoria = productos.filter(p => 
+            p.categoria === categoriaActual && 
+            p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+          );
 
-            return (
-            <div key={p.id} className="group bg-[#161b18] border border-gray-800 hover:border-[#c5a059]/50 transition-all duration-500 hover:-translate-y-2 shadow-xl hover:shadow-[#c5a059]/10 overflow-hidden relative rounded-sm flex flex-col">
-              <div className="relative h-56 overflow-hidden bg-[#0a0f0c] border-b border-[#c5a059]/10">
-                {p.imagen ? (
-                  <img src={p.imagen} alt={p.nombre} className="w-full h-full object-cover group-hover:scale-105 transition duration-700 opacity-90 group-hover:opacity-100" />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-[#2a352f] group-hover:text-[#c5a059]/30 transition">
-                    <span className="text-[10px] tracking-[0.3em] uppercase">Sin Imagen</span>
-                  </div>
-                )}
-                {p.plu && <div className="absolute top-0 right-0 bg-[#c5a059] text-[#062c16] text-[10px] font-bold px-3 py-1 uppercase tracking-wider shadow-lg">#{p.plu}</div>}
+          // Si la categoría está vacía por la búsqueda, no la mostramos
+          if (productosDeEstaCategoria.length === 0) return null;
+
+          return (
+            <div key={categoriaActual} className="mb-20">
+              {/* Título de la Categoría */}
+              <div className="flex items-center gap-4 mb-8">
+                <h2 className="text-3xl font-serif text-[#c5a059] uppercase tracking-widest">{categoriaActual}</h2>
+                <div className="flex-1 h-px bg-gradient-to-r from-[#c5a059]/50 to-transparent"></div>
               </div>
-              
-              <div className="p-5 flex flex-col flex-1">
-                <div className="mb-4">
-                  <h3 className="text-xl font-serif text-[#f0e6d2] mb-1 group-hover:text-[#c5a059] transition">{p.nombre}</h3>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest">{p.categoria}</p>
-                </div>
-                
-                <div className="mt-auto border-t border-gray-800 pt-4">
-                  <div className="flex justify-between items-end mb-4">
-                    <span className="block text-[10px] text-gray-500 uppercase tracking-wider">Valor Kilo</span>
-                    <span className="text-xl font-serif text-[#c5a059] font-medium">${p.precio.toLocaleString('es-CL')}</span>
-                  </div>
 
-                  {/* --- NUEVO INPUT LIBRE --- */}
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <input 
-                        type="number" 
-                        min="0"
-                        step="any"
-                        placeholder="Ej: 300"
-                        className="w-2/3 bg-[#0c120e] border border-[#c5a059]/50 text-[#f0e6d2] p-2 rounded-sm text-sm focus:outline-none focus:border-[#c5a059]"
-                        value={cantidades[p.id] !== undefined ? cantidades[p.id] : ""}
-                        onChange={(e) => setCantidades({...cantidades, [p.id]: e.target.value})}
-                      />
-                      <select 
-                        className="w-1/3 bg-[#0c120e] border border-[#c5a059]/50 text-[#f0e6d2] p-2 rounded-sm text-sm focus:outline-none focus:border-[#c5a059] cursor-pointer"
-                        value={unidades[p.id] || "gr"}
-                        onChange={(e) => setUnidades({...unidades, [p.id]: e.target.value})}
-                      >
-                        <option value="gr">Gr</option>
-                        <option value="kg">Kg</option>
-                      </select>
+              {/* Grilla de productos de ESTA categoría */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                {productosDeEstaCategoria.map((p) => {
+                  const pesoCalculado = getPesoCalculado(p.id);
+                  const precioAproximado = p.precio * pesoCalculado;
+
+                  return (
+                    <div key={p.id} className="group bg-[#161b18] border border-gray-800 hover:border-[#c5a059]/50 transition-all duration-500 hover:-translate-y-2 shadow-xl hover:shadow-[#c5a059]/10 overflow-hidden relative rounded-sm flex flex-col">
+                      <div className="relative h-56 overflow-hidden bg-[#0a0f0c] border-b border-[#c5a059]/10">
+                        {p.imagen ? (
+                          <img src={p.imagen} alt={p.nombre} className="w-full h-full object-cover group-hover:scale-105 transition duration-700 opacity-90 group-hover:opacity-100" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-[#2a352f] group-hover:text-[#c5a059]/30 transition">
+                            <span className="text-[10px] tracking-[0.3em] uppercase">Sin Imagen</span>
+                          </div>
+                        )}
+                        {p.plu && <div className="absolute top-0 right-0 bg-[#c5a059] text-[#062c16] text-[10px] font-bold px-3 py-1 uppercase tracking-wider shadow-lg">PLU #{p.plu}</div>}
+                      </div>
+                      
+                      <div className="p-5 flex flex-col flex-1">
+                        <div className="mb-4">
+                          <h3 className="text-xl font-serif text-[#f0e6d2] mb-1 group-hover:text-[#c5a059] transition">{p.nombre}</h3>
+                        </div>
+                        
+                        <div className="mt-auto border-t border-gray-800 pt-4">
+                          <div className="flex justify-between items-end mb-4">
+                            <span className="block text-[10px] text-gray-500 uppercase tracking-wider">Valor Kilo</span>
+                            <span className="text-xl font-serif text-[#c5a059] font-medium">${p.precio.toLocaleString('es-CL')}</span>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="flex gap-2">
+                              <input 
+                                type="number" min="0" step="any" placeholder="Ej: 300"
+                                className="w-2/3 bg-[#0c120e] border border-[#c5a059]/50 text-[#f0e6d2] p-2 rounded-sm text-sm focus:outline-none focus:border-[#c5a059]"
+                                value={cantidades[p.id] !== undefined ? cantidades[p.id] : ""}
+                                onChange={(e) => setCantidades({...cantidades, [p.id]: e.target.value})}
+                              />
+                              <select 
+                                className="w-1/3 bg-[#0c120e] border border-[#c5a059]/50 text-[#f0e6d2] p-2 rounded-sm text-sm focus:outline-none focus:border-[#c5a059] cursor-pointer"
+                                value={unidades[p.id] || "gr"}
+                                onChange={(e) => setUnidades({...unidades, [p.id]: e.target.value})}
+                              >
+                                <option value="gr">Gr</option>
+                                <option value="kg">Kg</option>
+                              </select>
+                            </div>
+
+                            <button 
+                              onClick={() => agregar(p, pesoCalculado)} 
+                              className="w-full bg-[#161b18] border border-[#c5a059] text-[#c5a059] hover:bg-[#c5a059] hover:text-[#062c16] px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all duration-300 rounded-sm flex justify-between items-center"
+                            >
+                              <span>Añadir</span>
+                              <span>Aprox ${(precioAproximado).toLocaleString('es-CL')}</span>
+                            </button>
+                            <p className="text-[9px] text-gray-500 text-center leading-tight tracking-wider">
+                              *VALOR APROXIMADO. SE PESARÁ EN LOCAL.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-
-                    <button 
-                      onClick={() => agregar(p, pesoCalculado)} 
-                      className="w-full bg-[#161b18] border border-[#c5a059] text-[#c5a059] hover:bg-[#c5a059] hover:text-[#062c16] px-4 py-2 text-xs uppercase tracking-widest font-bold transition-all duration-300 rounded-sm flex justify-between items-center"
-                    >
-                      <span>Añadir</span>
-                      <span>Aprox ${(precioAproximado).toLocaleString('es-CL')}</span>
-                    </button>
-                    <p className="text-[9px] text-gray-500 text-center leading-tight tracking-wider">
-                      *VALOR APROXIMADO. SE PESARÁ EN LOCAL.
-                    </p>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </div>
-          )})}
-        </div>
+          );
+        })}
       </div>
 
-      {/* --- FOOTER --- */}
+      {/* --- FOOTER CON MAPA Y HERRAMIENTAS --- */}
       <footer className="bg-[#050806] border-t border-[#c5a059]/20 mt-20 py-16 px-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
+           
+           {/* Información y WhatsApp */}
            <div>
-              <h3 className="text-3xl font-serif text-[#c5a059] mb-8">Nuestra Carnicería</h3>
-              <div className="flex flex-col items-center mt-4">
-  {/* Texto de la ubicación para que sea visual */}
-  <p className="text-gray-700 font-semibold mb-2">
-    📍 Visítanos en: Bustamante 157, Valparaíso
-  </p>
-              </div>
+              <h3 className="text-3xl font-serif text-[#c5a059] mb-4">Carnes Escobar</h3>
+              <p className="text-gray-400 font-semibold mb-6 flex items-center gap-2">
+                📍 Bustamante 157, Valparaíso
+              </p>
+              
+              <a 
+                href="https://wa.me/56984293570?text=Hola,%20vengo%20de%20la%20página%20web" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-8 rounded-full transition-all shadow-lg"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.008-.57-.008-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                </svg>
+                Hablar con Local
+              </a>
+           </div>
+
+           {/* Mapa de Google */}
+           <div className="w-full h-64 rounded-lg overflow-hidden border-2 border-[#c5a059]/20 shadow-xl">
+             <iframe 
+               src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3344.425950587742!2d-71.61625922361664!3d-33.04526547631722!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x9689e12f6a7fc87d%3A0x673c68c6a086055d!2sBustamante%20157%2C%202340000%20Valpara%C3%ADso!5e0!3m2!1ses-419!2scl!4v1708815234567!5m2!1ses-419!2scl" 
+               width="100%" 
+               height="100%" 
+               style={{ border: 0 }} 
+               allowFullScreen="" 
+               loading="lazy" 
+               referrerPolicy="no-referrer-when-downgrade">
+             </iframe>
            </div>
         </div>
-        <div className="flex justify-between items-center text-gray-600 text-xs mt-16 pt-8 border-t border-[#111] max-w-7xl mx-auto">
+
+        {/* Botonera de Administración y Copyright */}
+        <div className="flex flex-col md:flex-row justify-between items-center text-gray-600 text-xs mt-16 pt-8 border-t border-[#111] max-w-7xl mx-auto gap-4">
             <span className="uppercase tracking-widest">© 2026 Carnicería Escobar</span>
-            <a href="/admin/login" className="flex items-center gap-2 hover:text-[#c5a059] transition">Acceso Personal</a>
+            
+            <div className="flex gap-6">
+              {/* Botón para descargar el TXT para el LabelNet */}
+              <button 
+                onClick={descargarTXT}
+                className="flex items-center gap-2 text-[#c5a059] hover:text-white transition bg-[#161b18] px-4 py-2 rounded-sm border border-[#c5a059]/30"
+              >
+                ⬇️ Exportar TXT Pesas
+              </button>
+              
+              <a href="/admin/login" className="flex items-center gap-2 hover:text-[#c5a059] transition py-2">
+                🔒 Acceso Personal
+              </a>
+            </div>
         </div>
       </footer>
 
