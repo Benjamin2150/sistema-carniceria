@@ -245,11 +245,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
            <div>
               <h3 className="text-3xl font-serif text-[#c5a059] mb-8">Nuestra Carnicería</h3>
-              <div className="space-y-6 text-gray-400 font-light">
-                 <p className="flex items-center gap-4 group">
-                    <span className="w-10 h-10 rounded-full border border-[#c5a059] flex items-center justify-center text-[#c5a059]">📍</span> 
-                    <span>Valparaíso, Chile</span>
-                 </p>
+              <div className="flex flex-col items-center mt-4">
+  {/* Texto de la ubicación para que sea visual */}
+  <p className="text-gray-700 font-semibold mb-2">
+    📍 Visítanos en: Bustamante 157, Valparaíso
+  </p>
               </div>
            </div>
         </div>
